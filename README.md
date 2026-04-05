@@ -154,7 +154,7 @@ Verify Blnk is running: `http://localhost:5001/ledgers` should return `[]`.
 ### 2. Clone and configure this project
 
 ```bash
-git clone https://github.com/<your-username>/blnk-anomaly-detector
+git clone https://github.com/EMIKEY22/blnk-anomaly-detector
 cd blnk-anomaly-detector
 cp .env.example .env
 npm install
