@@ -1,0 +1,22 @@
+# This file extends Blnk's own docker-compose.yml.
+# Run with: docker compose -f docker-compose.blnk.yml -f docker-compose.yml up
+
+version: "3.8"
+
+services:
+  anomaly-detector:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - BLNK_BASE_URL=http://blnk:5001
+      - PORT=3000
+      - RISK_THRESHOLD=0.5
+    depends_on:
+      - blnk
+    networks:
+      - blnk_default
+
+networks:
+  blnk_default:
+    external: true

@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blnk Anomaly Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080c10;
+      --surface: #0d1117;
+      --border: #1c2333;
+      --border-bright: #2d3f55;
+      --text: #cdd9e5;
+      --text-dim: #636e7b;
+      --text-bright: #e6edf3;
+      --accent: #58a6ff;
+      --danger: #f85149;
+      --danger-dim: rgba(248, 81, 73, 0.12);
+      --warn: #d29922;
+      --warn-dim: rgba(210, 153, 34, 0.12);
+      --ok: #3fb950;
+      --ok-dim: rgba(63, 185, 80, 0.1);
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-bright);
+      letter-spacing: 0.02em;
+    }
+
+    .logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .live-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--ok);
+      background: var(--ok-dim);
+      border: 1px solid rgba(63, 185, 80, 0.25);
+      padding: 2px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Layout ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 28px; }
+
+    /* ── Stat cards ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 20px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text-bright);
+    }
+
+    .stat-value.danger { color: var(--danger); }
+    .stat-value.warn   { color: var(--warn); }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    /* ── Simulate panel ── */
+    .simulate-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+
+    .simulate-panel h3 {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .sim-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .sim-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .sim-field label {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-dim);
+    }
+
+    .sim-field input {
+      background: var(--bg);
+      border: 1px solid var(--border-bright);
+      border-radius: 4px;
+      padding: 7px 12px;
+      color: var(--text-bright);
+      font-family: var(--mono);
+      font-size: 13px;
+      width: 180px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .sim-field input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #080c10; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border-bright);
+    }
+
+    .sim-result {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: 12px;
+      display: none;
+    }
+
+    .sim-result.flagged {
+      background: var(--danger-dim);
+      border: 1px solid rgba(248,81,73,0.3);
+      color: var(--danger);
+      display: block;
+    }
+
+    .sim-result.clean {
+      background: var(--ok-dim);
+      border: 1px solid rgba(63,185,80,0.25);
+      color: var(--ok);
+      display: block;
+    }
+
+    /* ── Flags table ── */
+    .flags-table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      border-bottom: 1px solid var(--border-bright);
+    }
+
+    th {
+      padding: 10px 16px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: left;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(88,166,255,0.04); }
+
+    td {
+      padding: 12px 16px;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .mono { font-family: var(--mono); }
+    .dim  { color: var(--text-dim); }
+
+    .risk-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .risk-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border-bright);
+      width: 80px;
+      overflow: hidden;
+    }
+
+    .risk-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    .risk-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 38px;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin: 2px 2px 2px 0;
+    }
+
+    .tag-velocity  { background: rgba(248,81,73,0.15);   color: #ff7b72; border: 1px solid rgba(248,81,73,0.25); }
+    .tag-struct    { background: rgba(210,153,34,0.15);  color: #e3b341; border: 1px solid rgba(210,153,34,0.3); }
+    .tag-large     { background: rgba(88,166,255,0.12);  color: #79c0ff; border: 1px solid rgba(88,166,255,0.2); }
+    .tag-round     { background: rgba(188,140,255,0.12); color: #d2a8ff; border: 1px solid rgba(188,140,255,0.2); }
+    .tag-roundtrip { background: rgba(248,81,73,0.2);    color: #ff7b72; border: 1px solid rgba(248,81,73,0.3); }
+    .tag-first     { background: rgba(210,153,34,0.12);  color: #e3b341; border: 1px solid rgba(210,153,34,0.25); }
+    .tag-default   { background: var(--border);          color: var(--text-dim); border: 1px solid var(--border-bright); }
+
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    .empty-state span { display: block; font-size: 28px; margin-bottom: 10px; }
+
+    /* ── Rule breakdown ── */
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .rule-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .rule-name {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .rule-count {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--warn);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    BLNK / ANOMALY DETECTOR
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <a href="wallet.html" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);text-decoration:none;border:1px solid var(--border-bright);padding:6px 14px;border-radius:4px;">Wallet</a>
+    <span class="live-badge">LIVE</span>
+    <button class="btn btn-ghost" onclick="loadData()">↻ Refresh</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Flagged</div>
+      <div class="stat-value danger" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Risk Score</div>
+      <div class="stat-value warn" id="stat-avg">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Top Rule</div>
+      <div class="stat-value" id="stat-top-rule" style="font-size:14px;padding-top:6px;color:var(--accent)">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Updated</div>
+      <div class="stat-value" id="stat-time" style="font-size:13px;padding-top:4px;color:var(--text-dim)">—</div>
+    </div>
+  </div>
+
+  <!-- Simulate panel -->
+  <div class="simulate-panel">
+    <h3>⚡ Simulate Transaction</h3>
+    <div class="sim-row">
+      <div class="sim-field">
+        <label>Amount</label>
+        <input type="number" id="sim-amount" value="9500" placeholder="Amount" />
+      </div>
+      <div class="sim-field">
+        <label>Currency</label>
+        <input type="text" id="sim-currency" value="USD" placeholder="USD" style="width:90px" />
+      </div>
+      <div class="sim-field">
+        <label>Source Balance ID</label>
+        <input type="text" id="sim-source" value="balance_alice" placeholder="balance_alice" />
+      </div>
+      <div class="sim-field">
+        <label>Destination Balance ID</label>
+        <input type="text" id="sim-dest" value="balance_bob" placeholder="balance_bob" />
+      </div>
+      <button class="btn btn-primary" onclick="simulate()">Run Simulation</button>
+    </div>
+    <div class="sim-result" id="sim-result"></div>
+  </div>
+
+  <!-- Flags table -->
+  <div class="section-header">
+    <div class="section-title">Flagged Transactions</div>
+  </div>
+
+  <div class="flags-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Transaction ID</th>
+          <th>Amount</th>
+          <th>Source → Destination</th>
+          <th>Risk Score</th>
+          <th>Triggered Rules</th>
+        </tr>
+      </thead>
+      <tbody id="flags-body">
+        <tr>
+          <td colspan="6">
+            <div class="empty-state">
+              <span>🔍</span>
+              No flagged transactions yet. Simulate one above or connect Blnk webhooks.
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Rule breakdown -->
+  <div class="section-header" style="margin-top:28px">
+    <div class="section-title">Rule Breakdown</div>
+  </div>
+  <div class="rules-grid" id="rules-grid">
+    <!-- populated by JS -->
+  </div>
+
+</main>
+
+<script>
+const RULES_META = {
+  VELOCITY_SPIKE:   { label: 'Velocity Spike',      cls: 'tag-velocity'  },
+  STRUCTURING:      { label: 'Structuring',          cls: 'tag-struct'    },
+  LARGE_TRANSFER:   { label: 'Large Transfer',       cls: 'tag-large'     },
+  ROUND_NUMBER:     { label: 'Round Number',         cls: 'tag-round'     },
+  ROUND_TRIP:       { label: 'Round Trip',           cls: 'tag-roundtrip' },
+  FIRST_TIME_LARGE: { label: 'First-Time Large',     cls: 'tag-first'     },
+};
+
+function riskColor(score) {
+  if (score >= 0.75) return 'var(--danger)';
+  if (score >= 0.5)  return 'var(--warn)';
+  return 'var(--ok)';
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-GB', { hour12: false }) +
+    ' ' + d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+}
+
+function truncate(str, n) {
+  return str.length > n ? str.slice(0, n) + '…' : str;
+}
+
+async function loadData() {
+  try {
+    const [flagsRes, statsRes] = await Promise.all([
+      fetch('/api/flags'),
+      fetch('/api/stats'),
+    ]);
+    const flags = await flagsRes.json();
+    const stats = await statsRes.json();
+    renderStats(stats);
+    renderTable(flags);
+    renderRules(stats.byRule);
+  } catch (e) {
+    console.error('Failed to load data:', e);
+  }
+}
+
+function renderStats(stats) {
+  document.getElementById('stat-total').textContent = stats.total;
+  document.getElementById('stat-avg').textContent =
+    stats.total > 0 ? stats.avgRisk.toFixed(2) : '—';
+
+  const topRule = Object.entries(stats.byRule ?? {})
+    .sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('stat-top-rule').textContent =
+    topRule ? RULES_META[topRule[0]]?.label ?? topRule[0] : '—';
+
+  document.getElementById('stat-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+}
+
+function renderTable(flags) {
+  const tbody = document.getElementById('flags-body');
+  if (!flags.length) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state"><span>🔍</span>No flagged transactions yet. Simulate one above or connect Blnk webhooks.</div>
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = flags.map(e => {
+    const score = e.result.riskScore;
+    const color = riskColor(score);
+    const pct   = Math.round(score * 100);
+
+    const tags = e.result.flags.map(f => {
+      const meta = RULES_META[f.rule] ?? { label: f.rule, cls: 'tag-default' };
+      return `<span class="tag ${meta.cls}" title="${f.detail}">${meta.label}</span>`;
+    }).join('');
+
+    return `<tr>
+      <td class="mono dim">${formatTime(e.timestamp)}</td>
+      <td class="mono" style="color:var(--accent);font-size:11px">${truncate(e.transaction.id, 24)}</td>
+      <td class="mono" style="color:var(--text-bright)">${e.transaction.amount.toLocaleString()} <span class="dim">${e.transaction.currency}</span></td>
+      <td class="mono dim" style="font-size:11px">
+        ${truncate(e.transaction.source, 18)}<br/>
+        <span style="color:var(--border-bright)">↓</span> ${truncate(e.transaction.destination, 18)}
+      </td>
+      <td>
+        <div class="risk-bar-wrap">
+          <div class="risk-bar">
+            <div class="risk-bar-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+          <span class="risk-label" style="color:${color}">${score.toFixed(2)}</span>
+        </div>
+      </td>
+      <td>${tags}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRules(byRule) {
+  const grid = document.getElementById('rules-grid');
+  const allRules = Object.keys(RULES_META);
+  grid.innerHTML = allRules.map(key => {
+    const meta = RULES_META[key];
+    const count = byRule?.[key] ?? 0;
+    return `<div class="rule-card">
+      <span class="rule-name">${meta.label}</span>
+      <span class="rule-count">${count}</span>
+    </div>`;
+  }).join('');
+}
+
+async function simulate() {
+  const amount   = parseFloat(document.getElementById('sim-amount').value) || 9500;
+  const currency = document.getElementById('sim-currency').value || 'USD';
+  const source   = document.getElementById('sim-source').value || 'balance_sim';
+  const dest     = document.getElementById('sim-dest').value || 'balance_sim_dest';
+
+  const res = await fetch('/api/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount, currency, source, destination: dest }),
+  });
+
+  const data = await res.json();
+  const result = data.result;
+  const el = document.getElementById('sim-result');
+
+  if (result.flagged) {
+    el.className = 'sim-result flagged';
+    el.innerHTML = `🚨 FLAGGED — score: ${result.riskScore.toFixed(3)}<br/>` +
+      result.flags.map(f => `  • ${f.rule}: ${f.detail}`).join('<br/>');
+  } else {
+    el.className = 'sim-result clean';
+    el.innerHTML = `✓ CLEAN — score: ${result.riskScore.toFixed(3)} (below threshold)`;
+  }
+
+  loadData();
+}
+
+// Auto-refresh every 10 seconds
+loadData();
+setInterval(loadData, 10000);
+</script>
+
+</body>
+</html>
