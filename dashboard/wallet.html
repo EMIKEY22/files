@@ -67,7 +67,6 @@
       color: var(--text-dim); margin-bottom: 14px;
     }
 
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 28px; }
 
     .card {
@@ -111,12 +110,11 @@
     .result {
       margin-top: 12px; padding: 10px 14px; border-radius: 4px;
       font-family: var(--mono); font-size: 11px; line-height: 1.6;
-      display: none; word-break: break-all;
+      display: none; word-break: break-all; white-space: pre-line;
     }
     .result.ok { background: var(--ok-dim); border: 1px solid rgba(63,185,80,0.25); color: var(--ok); display: block; }
     .result.err { background: var(--danger-dim); border: 1px solid rgba(248,81,73,0.3); color: var(--danger); display: block; }
 
-    /* Wallets list */
     .wallets-wrap {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 6px; overflow: hidden; margin-bottom: 28px;
@@ -157,13 +155,20 @@
     }
     .view-btn:hover { background: rgba(88,166,255,0.1); }
 
+    .freeze-btn {
+      background: none; border: 1px solid var(--warn);
+      color: var(--warn); font-family: var(--mono); font-size: 10px;
+      padding: 4px 10px; border-radius: 3px; cursor: pointer;
+      transition: all 0.15s; margin-left: 8px;
+    }
+    .freeze-btn:hover { background: rgba(210,153,34,0.1); }
+
     .empty-state {
       padding: 40px; text-align: center;
       color: var(--text-dim); font-family: var(--mono); font-size: 12px;
     }
     .empty-state span { display: block; font-size: 24px; margin-bottom: 8px; }
 
-    /* Transaction history modal */
     .modal-backdrop {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.7); z-index: 200;
@@ -204,6 +209,12 @@
     .tx-amount { font-family: var(--mono); font-size: 14px; font-weight: 600; }
     .tx-credit { color: var(--ok); }
     .tx-debit { color: var(--danger); }
+
+    .status-active, .status-frozen {
+      font-family: var(--mono); font-size: 11px; font-weight: 600;
+    }
+    .status-active { color: var(--ok); }
+    .status-frozen { color: var(--danger); }
   </style>
 </head>
 <body>
@@ -220,11 +231,7 @@
 </header>
 
 <main>
-
-  <!-- Action cards -->
   <div class="grid-3">
-
-    <!-- Create Wallet -->
     <div class="card">
       <h3>➕ Create Wallet</h3>
       <div class="field">
@@ -239,7 +246,6 @@
       <div class="result" id="create-result"></div>
     </div>
 
-    <!-- Deposit -->
     <div class="card">
       <h3>💰 Deposit Funds</h3>
       <div class="field">
@@ -258,7 +264,6 @@
       <div class="result" id="deposit-result"></div>
     </div>
 
-    <!-- Transfer -->
     <div class="card">
       <h3>↗️ Transfer</h3>
       <div class="field">
@@ -276,10 +281,8 @@
       <button class="btn btn-warn" onclick="transfer()">Transfer</button>
       <div class="result" id="transfer-result"></div>
     </div>
-
   </div>
 
-  <!-- Wallets table -->
   <h2>Wallets Created This Session</h2>
   <div class="wallets-wrap">
     <table>
@@ -288,21 +291,20 @@
           <th>Owner</th>
           <th>Wallet ID</th>
           <th>Currency</th>
+          <th>Status</th>
           <th>Balance</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody id="wallets-body">
-        <tr><td colspan="5">
+        <tr><td colspan="6">
           <div class="empty-state"><span>👛</span>No wallets yet. Create one above.</div>
         </td></tr>
       </tbody>
     </table>
   </div>
-
 </main>
 
-<!-- Transaction history modal -->
 <div class="modal-backdrop" id="modal">
   <div class="modal">
     <div class="modal-header">
@@ -314,8 +316,8 @@
 </div>
 
 <script>
-  // Session wallet store (in-memory, refreshes on page reload)
-  const wallets = JSON.parse(localStorage.getItem('blnk_wallets') || '[]');
+  let wallets = JSON.parse(localStorage.getItem('blnk_wallets') || '[]');
+  let frozenWalletIds = [];
 
   function showResult(id, message, isError = false) {
     const el = document.getElementById(id);
@@ -329,36 +331,73 @@
     setTimeout(() => btn.textContent = 'Copy', 1500);
   }
 
+  async function loadFrozenWallets() {
+    try {
+      const res = await fetch('/api/frozen-wallets');
+      const data = await res.json();
+      frozenWalletIds = data.frozenWallets ?? [];
+    } catch (_) {
+      frozenWalletIds = [];
+    }
+  }
+  async function syncWalletStorageWithServer() {
+    try {
+      const res = await fetch('/api/session');
+      const data = await res.json();
+
+      const savedServerInstanceId = sessionStorage.getItem('blnk_server_instance_id');
+
+      if (savedServerInstanceId !== data.serverInstanceId) {
+        localStorage.removeItem('blnk_wallets');
+        wallets = [];
+        sessionStorage.setItem('blnk_server_instance_id', data.serverInstanceId);
+      }
+    } catch (_) {}
+  }
   function renderWallets() {
     const tbody = document.getElementById('wallets-body');
+
     if (!wallets.length) {
-      tbody.innerHTML = `<tr><td colspan="5">
+      tbody.innerHTML = `<tr><td colspan="6">
         <div class="empty-state"><span>👛</span>No wallets yet. Create one above.</div>
       </td></tr>`;
       return;
     }
 
-    tbody.innerHTML = wallets.map(w => `
-      <tr>
-        <td class="mono" style="color:var(--text-bright)">${w.owner}</td>
-        <td>
-          <span class="mono dim" style="font-size:11px">${w.walletId}</span>
-          <button class="copy-btn" onclick="copyToClipboard('${w.walletId}', this)">Copy</button>
-        </td>
-        <td class="mono dim">${w.currency}</td>
-        <td><span class="balance-amount" id="bal-${w.walletId}">${w.balance.toLocaleString()}</span></td>
-        <td>
-          <button class="view-btn" onclick="viewWallet('${w.walletId}', '${w.owner}')">View Txns</button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = wallets.map(w => {
+      const isFrozen = frozenWalletIds.includes(w.walletId);
+
+      return `
+        <tr>
+          <td class="mono" style="color:var(--text-bright)">${w.owner}</td>
+          <td>
+            <span class="mono dim" style="font-size:11px">${w.walletId}</span>
+            <button class="copy-btn" onclick="copyToClipboard('${w.walletId}', this)">Copy</button>
+          </td>
+          <td class="mono dim">${w.currency}</td>
+          <td>
+            <span class="${isFrozen ? 'status-frozen' : 'status-active'}">
+              ${isFrozen ? 'FROZEN' : 'ACTIVE'}
+            </span>
+          </td>
+          <td><span class="balance-amount" id="bal-${w.walletId}">${Number(w.balance || 0).toLocaleString()}</span></td>
+          <td>
+            <button class="view-btn" onclick="viewWallet('${w.walletId}', '${w.owner}')">View Txns</button>
+            ${isFrozen ? `<button class="freeze-btn" onclick="unfreezeWallet('${w.walletId}')">Unfreeze</button>` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   async function createWallet() {
     const owner = document.getElementById('create-owner').value.trim();
     const currency = document.getElementById('create-currency').value.trim() || 'USD';
 
-    if (!owner) { showResult('create-result', 'Owner name is required', true); return; }
+    if (!owner) {
+      showResult('create-result', 'Owner name is required', true);
+      return;
+    }
 
     try {
       const res = await fetch('/api/wallet/create', {
@@ -366,18 +405,21 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner, currency })
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed');
 
       wallets.push(data);
       localStorage.setItem('blnk_wallets', JSON.stringify(wallets));
+
+      await loadFrozenWallets();
       renderWallets();
+
       showResult('create-result', `✓ Wallet created!\nID: ${data.walletId}`);
 
-      // Auto-fill deposit and transfer fields for convenience
       document.getElementById('deposit-walletid').value = data.walletId;
+      document.getElementById('deposit-currency').value = data.currency;
       document.getElementById('transfer-from').value = data.walletId;
-
     } catch (err) {
       showResult('create-result', `Error: ${err.message}`, true);
     }
@@ -388,7 +430,10 @@
     const amount = parseFloat(document.getElementById('deposit-amount').value);
     const currency = document.getElementById('deposit-currency').value.trim() || 'USD';
 
-    if (!walletId || !amount) { showResult('deposit-result', 'Wallet ID and amount are required', true); return; }
+    if (!walletId || !amount) {
+      showResult('deposit-result', 'Wallet ID and amount are required', true);
+      return;
+    }
 
     try {
       const res = await fetch('/api/wallet/deposit', {
@@ -396,17 +441,18 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletId, amount, currency })
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed');
 
-      // Update balance display
-      const balEl = document.getElementById(`bal-${walletId}`);
-      if (balEl) balEl.textContent = data.newBalance.toLocaleString();
-      const w = wallets.find(x => x.walletId === walletId);
-      if (w) w.balance = data.newBalance;
+      showResult(
+        'deposit-result',
+        `✓ Deposited ${amount.toLocaleString()} ${currency}\nTx ID: ${data.transactionId}`
+      );
 
-      showResult('deposit-result', `✓ Deposited ${amount.toLocaleString()} ${currency}\nTx ID: ${data.transactionId}\nNew balance: ${data.newBalance.toLocaleString()}`);
-
+      await refreshBalance(walletId);
+      await loadFrozenWallets();
+      renderWallets();
     } catch (err) {
       showResult('deposit-result', `Error: ${err.message}`, true);
     }
@@ -418,7 +464,8 @@
     const amount = parseFloat(document.getElementById('transfer-amount').value);
 
     if (!fromWalletId || !toWalletId || !amount) {
-      showResult('transfer-result', 'All fields are required', true); return;
+      showResult('transfer-result', 'All fields are required', true);
+      return;
     }
 
     try {
@@ -427,17 +474,19 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromWalletId, toWalletId, amount })
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed');
 
-      showResult('transfer-result',
+      showResult(
+        'transfer-result',
         `✓ Transferred ${amount.toLocaleString()}\nTx ID: ${data.transactionId}\n⚠ This transaction is now being scored by the anomaly detector`
       );
 
-      // Refresh balances for both wallets
-      refreshBalance(fromWalletId);
-      refreshBalance(toWalletId);
-
+      await refreshBalance(fromWalletId);
+      await refreshBalance(toWalletId);
+      await loadFrozenWallets();
+      renderWallets();
     } catch (err) {
       showResult('transfer-result', `Error: ${err.message}`, true);
     }
@@ -447,17 +496,27 @@
     try {
       const res = await fetch(`/api/wallet/${walletId}`);
       const data = await res.json();
-      const rawBalance = data.balance.balance || data.balance.credit_balance || 0;
+
+      const rawBalance =
+        (data.balance.balance ?? 0) !== 0
+          ? data.balance.balance
+          : (data.balance.credit_balance ?? 0) - (data.balance.debit_balance ?? 0);
+
       const balEl = document.getElementById(`bal-${walletId}`);
-      if (balEl) balEl.textContent = rawBalance.toLocaleString();
+      if (balEl) balEl.textContent = Number(rawBalance).toLocaleString();
+
       const w = wallets.find(x => x.walletId === walletId);
-      if (w) { w.balance = rawBalance; localStorage.setItem('blnk_wallets', JSON.stringify(wallets)); }
+      if (w) {
+        w.balance = rawBalance;
+        localStorage.setItem('blnk_wallets', JSON.stringify(wallets));
+      }
     } catch (_) {}
   }
 
   async function viewWallet(walletId, owner) {
     document.getElementById('modal-title').textContent = `${owner} — Transaction History`;
-    document.getElementById('modal-body').innerHTML = '<p style="color:var(--text-dim);font-family:var(--mono);font-size:12px">Loading...</p>';
+    document.getElementById('modal-body').innerHTML =
+      '<p style="color:var(--text-dim);font-family:var(--mono);font-size:12px;padding:20px 0">Loading...</p>';
     document.getElementById('modal').classList.add('open');
 
     try {
@@ -475,19 +534,38 @@
         const isCredit = tx.destination === walletId;
         const sign = isCredit ? '+' : '-';
         const cls = isCredit ? 'tx-credit' : 'tx-debit';
+
         return `
           <div class="tx-item">
             <div>
               <div class="tx-desc">${tx.description ?? 'Transaction'}</div>
-              <div class="tx-ref">${tx.reference} · ${new Date(tx.created_at).toLocaleString()}</div>
+              <div class="tx-ref">${tx.reference} · ${new Date(tx.timestamp || tx.created_at).toLocaleString()}</div>
             </div>
-            <div class="tx-amount ${cls}">${sign}${tx.amount.toLocaleString()} ${tx.currency}</div>
+            <div class="tx-amount ${cls}">${sign}${Number(tx.amount).toLocaleString()} ${tx.currency}</div>
           </div>`;
       }).join('');
-
     } catch (err) {
       document.getElementById('modal-body').innerHTML =
         `<p style="color:var(--danger);font-family:var(--mono);font-size:12px">Error: ${err.message}</p>`;
+    }
+  }
+
+  async function unfreezeWallet(walletId) {
+    try {
+      const res = await fetch('/api/wallet/unfreeze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletId })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to unfreeze wallet');
+
+      await loadFrozenWallets();
+      renderWallets();
+      alert(`Wallet unfrozen: ${walletId}`);
+    } catch (err) {
+      alert(`Error: ${err.message}`);
     }
   }
 
@@ -495,13 +573,19 @@
     document.getElementById('modal').classList.remove('open');
   }
 
-  // Close modal on backdrop click
   document.getElementById('modal').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
   });
 
-  // Render saved wallets on page load
+  (async function init() {
+  await syncWalletStorageWithServer();
+  await loadFrozenWallets();
   renderWallets();
+
+  for (const w of wallets) {
+    await refreshBalance(w.walletId);
+  }
+})();
 </script>
 
 </body>

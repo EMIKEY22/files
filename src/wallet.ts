@@ -35,10 +35,12 @@ export class WalletService {
 
   private async getOrCreateLedger(): Promise<string> {
     if (this.ledgerId) return this.ledgerId;
+
     const ledger = await this.blnk.createLedger({
       name: "User Wallets",
       meta_data: { description: "Ledger for all user wallets" },
     });
+
     this.ledgerId = ledger.ledger_id;
     return this.ledgerId;
   }
@@ -64,8 +66,12 @@ export class WalletService {
     return balance.balance_id;
   }
 
-  async createWallet(owner: string, currency: string = "USD"): Promise<CreateWalletResult> {
+  async createWallet(
+    owner: string,
+    currency: string = "USD"
+  ): Promise<CreateWalletResult> {
     const ledgerId = await this.getOrCreateLedger();
+
     const balance = await this.blnk.createBalance({
       ledger_id: ledgerId,
       currency,
@@ -75,16 +81,24 @@ export class WalletService {
         type: "user_wallet",
       },
     });
+
     return {
       walletId: balance.balance_id,
       ledgerId,
       owner,
       currency,
-      balance: balance.balance,
+      balance:
+        (balance.balance ?? 0) !== 0
+          ? balance.balance
+          : (balance.credit_balance ?? 0) - (balance.debit_balance ?? 0),
     };
   }
 
-  async deposit(walletId: string, amount: number, currency: string = "USD"): Promise<DepositResult> {
+  async deposit(
+    walletId: string,
+    amount: number,
+    currency: string = "USD"
+  ): Promise<DepositResult> {
     const fundingPoolId = await this.getOrCreateFundingPool(currency);
     const reference = `deposit_${walletId}_${Date.now()}`;
 
@@ -101,17 +115,28 @@ export class WalletService {
     });
 
     const balance = await this.blnk.getBalance(walletId);
+    const computedBalance =
+      (balance.balance ?? 0) !== 0
+        ? balance.balance
+        : (balance.credit_balance ?? 0) - (balance.debit_balance ?? 0);
+
     return {
       transactionId: tx.transaction_id,
       walletId,
       amount,
       currency,
-      newBalance: balance.balance,
+      newBalance: computedBalance,
     };
   }
 
-  async transfer(fromWalletId: string, toWalletId: string, amount: number, currency: string = "USD"): Promise<TransferResult> {
+  async transfer(
+    fromWalletId: string,
+    toWalletId: string,
+    amount: number,
+    currency: string = "USD"
+  ): Promise<TransferResult> {
     const reference = `transfer_${fromWalletId}_${toWalletId}_${Date.now()}`;
+
     const tx = await this.blnk.createTransaction({
       amount,
       currency,
@@ -123,6 +148,7 @@ export class WalletService {
       allow_overdraft: false,
       meta_data: { type: "transfer" },
     });
+
     return {
       transactionId: tx.transaction_id,
       fromWalletId,
@@ -140,6 +166,7 @@ export class WalletService {
       this.blnk.getBalance(walletId),
       this.blnk.getTransactionsForBalance(walletId, 20),
     ]);
+
     return { balance, transactions };
   }
 }

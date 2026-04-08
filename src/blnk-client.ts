@@ -95,23 +95,16 @@ export class BlnkClient {
     balanceId: string,
     limit = 50
   ): Promise<BlnkTransaction[]> {
-    try {
-      const res = await this.http.get<BlnkTransaction[]>(
-        `/balances/${balanceId}/transactions`,
-        { params: { limit } }
-      );
-      return res.data ?? [];
-    } catch {
-      // Endpoint may not be available — return empty silently
-      return [];
+    return [];
+
     }
-  }
 
   async createTransaction(input: CreateTransactionInput): Promise<BlnkTransaction> {
     try {
       const res = await this.http.post<BlnkTransaction>("/transactions", input);
       return res.data;
-    } catch {
+    } catch (err) {
+      console.error("[blnk] createTransaction failed:", err);
       // Endpoint may not be available — throw an error
       throw new Error("Failed to create transaction");
     }
@@ -127,12 +120,13 @@ export class BlnkClient {
     riskScore: number,
     flags: string[]
   ): Promise<void> {
-    await this.http.patch(`/transactions/${transactionId}/metadata`, {
+    await this.http.post(`/${transactionId}/metadata`, {
       meta_data: {
         anomaly_risk_score: riskScore,
         anomaly_flags: flags,
         anomaly_reviewed_at: new Date().toISOString(),
       },
     });
-  }
+
+    }
 }
